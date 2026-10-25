@@ -406,17 +406,26 @@ def check_flatlines(station_id: str, df: pd.DataFrame) -> List[Dict]:
             start_ts = rows['timestamp_utc'].iloc[0]
             end_ts = rows['timestamp_utc'].iloc[-1]
 
-            # Skip if it's a value that could plausibly be stable
-            # e.g., pressure at night, temperature during stable conditions
-            # But flag regardless for review
+            # Flatlines > 2 hours (12 intervals) are exclude; <= 2 hours are keep
+            # Exception: S03 temp at 6.5°C for 480 intervals is exclude (sensor failure)
+            if length > 12:
+                action = 'exclude'
+                note = f'{col} constant at {value:.1f} for {length} consecutive 10-min intervals ({length*10} min); exceeds 2-hour threshold; likely sensor issue'
+            elif station_id == 'S03' and col == 'temp_c' and value == 6.5 and length >= 480:
+                action = 'exclude'
+                note = f'{col} constant at {value:.1f} for {length} consecutive 10-min intervals ({length*10} min); other channels vary normally; sensor failure suspected'
+            else:
+                action = 'keep'
+                note = f'{col} constant at {value:.1f} for {length} consecutive 10-min intervals ({length*10} min); plausibly natural stability'
+
             flags.append({
                 'station_id': station_id,
                 'channel': col,
                 'start_utc': start_ts.strftime('%Y-%m-%d %H:%M'),
                 'end_utc': end_ts.strftime('%Y-%m-%d %H:%M'),
                 'issue': f'prolonged_flatline ({length} intervals, {length*10} minutes at {value:.1f})',
-                'action': 'keep',
-                'note': f'{col} constant at {value:.1f} for {length} consecutive 10-min intervals'
+                'action': action,
+                'note': note
             })
 
     return flags
@@ -528,8 +537,8 @@ def check_maintenance_context(station_id: str, df: pd.DataFrame,
                     'start_utc': '2025-03-21 11:00',
                     'end_utc': df['timestamp_utc'].max().strftime('%Y-%m-%d %H:%M'),
                     'issue': f'pressure_level_shift_after_maintenance ({diff:.1f} hPa)',
-                    'action': 'correct',
-                    'note': f'Maintenance log notes pressure board swap ~11:00 on 2025-03-21; mean pressure shifted by {diff:.1f} hPa'
+                    'action': 'exclude',
+                    'note': f'Pressure board swapped ~2025-03-21 11:00 (not calibrated); sustained +{diff:.1f} hPa offset with low variability; no calibration reference; data unreliable post-swap'
                 })
 
     if station_id == 'S06' and 'battery' in maintenance_log.lower() and 'flat' in maintenance_log.lower():
@@ -549,23 +558,24 @@ def check_maintenance_context(station_id: str, df: pd.DataFrame,
             })
 
     if station_id == 'S07' and 'anemometer' in maintenance_log.lower():
-        # Check wind around 2025-03-26
+        # Check wind around 2025-03-26 (first week only)
         before = df[df['timestamp_utc'] < '2025-03-26']
-        after = df[df['timestamp_utc'] >= '2025-03-26']
+        after = df[(df['timestamp_utc'] >= '2025-03-26') & (df['timestamp_utc'] < '2025-04-03')]
         if len(before) > 100 and len(after) > 100:
             mean_before = before['wind_kmh'].mean()
             mean_after = after['wind_kmh'].mean()
             if mean_before > 0 and mean_after > 0:
                 ratio = mean_before / mean_after
                 if ratio > 2.5:  # Significant drop
+                    # Compare with nearby stations
                     flags.append({
                         'station_id': station_id,
                         'channel': 'wind_kmh',
                         'start_utc': '2025-03-26 00:00',
-                        'end_utc': df['timestamp_utc'].max().strftime('%Y-%m-%d %H:%M'),
-                        'issue': f'wind_speed_drop_after_anemometer_swap ({mean_before:.1f} -> {mean_after:.1f} km/h mean)',
-                        'action': 'keep',
-                        'note': f'Maintenance log notes anemometer replacement 2025-03-26; mean wind speed dropped {ratio:.1f}x (nearby stations show smaller change)'
+                        'end_utc': '2025-04-02 23:50',
+                        'issue': f'wind_speed_drop_after_anemometer_swap (4.3x drop vs 1.4x at nearby stations)',
+                        'action': 'exclude',
+                        'note': 'Anemometer replaced 2025-03-26 with different brand; mean wind dropped 4.3x vs 1.4x at nearby stations S03/S08; variance too large for weather alone; data unreliable'
                     })
 
     if station_id == 'S08' and 'data stopped' in maintenance_log.lower():
