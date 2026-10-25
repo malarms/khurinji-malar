@@ -70,14 +70,3 @@ python3 test_checker.py
 ```
 
 Tests cover: timestamp checks (duplicates, gaps, out-of-order), sensor bounds, supersaturation, flatlines, GPS discrepancies, and read-only verification.
-
-## Data Pack (not in repo)
-
-The `assignment_data/` directory contains:
-- `stations.csv` — 8 station metadata (id, name, lat, lon, elevation, install date)
-- `data/S01.csv`–`data/S08.csv` — 10-min weather observations (temp, RH, pressure, wind, rain, GHI)
-- `gps/S01.nmea`–`gps/S08.nmea` — raw NMEA sentences (GPRMC, GPGGA)
-- `maintenance_log.md` — volunteer notes
-- `README.md` — pack documentation
-
-**Never commit or modify `assignment_data/`** — it is gitignored.
