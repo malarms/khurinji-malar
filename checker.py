@@ -138,6 +138,11 @@ def check_timestamps(station_id: str, df: pd.DataFrame) -> List[Dict]:
 
     ts = df['timestamp_utc']
 
+    # Fixed expected window for this data pack
+    EXPECTED_START = pd.Timestamp('2025-03-01 00:00:00')
+    EXPECTED_END = pd.Timestamp('2025-04-11 23:50:00')
+    expected_range = pd.date_range(EXPECTED_START, EXPECTED_END, freq='10min')
+
     # Duplicate timestamps - group consecutive duplicates
     dup_mask = ts.duplicated(keep=False)
     if dup_mask.any():
@@ -187,13 +192,15 @@ def check_timestamps(station_id: str, df: pd.DataFrame) -> List[Dict]:
                 'note': f'Timestamp goes backward: {prev_ts} -> {curr_ts}'
             })
 
-    # Missing intervals (gaps > 10 min)
+    # Missing intervals (gaps > 10 min) - internal gaps
     gaps = diffs[diffs > 600]
+    missing_from_gaps = 0
     if len(gaps) > 0:
         for idx, gap in gaps.items():
             prev_ts = ts.iloc[idx - 1]
             curr_ts = ts.iloc[idx]
             missing_intervals = int(gap / 600) - 1
+            missing_from_gaps += missing_intervals
             flags.append({
                 'station_id': station_id,
                 'channel': 'all',
@@ -204,21 +211,59 @@ def check_timestamps(station_id: str, df: pd.DataFrame) -> List[Dict]:
                 'note': f'Gap of {gap/60:.1f} minutes ({missing_intervals} missing intervals)'
             })
 
-    # Expected coverage check
-    expected_intervals = int((ts.max() - ts.min()).total_seconds() / 600) + 1
-    actual_intervals = len(ts.unique())
-    if actual_intervals < expected_intervals:
-        missing_total = expected_intervals - actual_intervals
-        if missing_total > 2:
-            flags.append({
-                'station_id': station_id,
-                'channel': 'all',
-                'start_utc': ts.min().strftime('%Y-%m-%d %H:%M'),
-                'end_utc': ts.max().strftime('%Y-%m-%d %H:%M'),
-                'issue': f'incomplete_coverage ({missing_total} intervals missing from expected {expected_intervals})',
-                'action': 'keep',
-                'note': f'Expected {expected_intervals} intervals from {ts.min()} to {ts.max()}, found {actual_intervals}'
-            })
+    # Check for missing timestamps at the start of expected window
+    actual_unique = pd.DatetimeIndex(ts.unique())
+    missing_at_start = expected_range.difference(actual_unique)
+    missing_at_start = missing_at_start[missing_at_start < ts.min()]
+    n_missing_start = len(missing_at_start)
+
+    # Check for missing timestamps at the end of expected window
+    missing_at_end = expected_range.difference(actual_unique)
+    missing_at_end = missing_at_end[missing_at_end > ts.max()]
+    n_missing_end = len(missing_at_end)
+
+    # Expected coverage check against fixed window
+    expected_total = len(expected_range)  # 6048
+    actual_intervals = len(actual_unique)
+    missing_total = expected_total - actual_intervals
+
+    # Only flag incomplete_coverage if there are missing intervals NOT explained by specific flags
+    # (internal gaps + missing at start + missing at end)
+    explained_missing = missing_from_gaps + n_missing_start + n_missing_end
+    unexplained_missing = missing_total - explained_missing
+    if unexplained_missing > 2:
+        flags.append({
+            'station_id': station_id,
+            'channel': 'all',
+            'start_utc': EXPECTED_START.strftime('%Y-%m-%d %H:%M'),
+            'end_utc': EXPECTED_END.strftime('%Y-%m-%d %H:%M'),
+            'issue': f'incomplete_coverage ({unexplained_missing} intervals missing from expected {expected_total})',
+            'action': 'keep',
+            'note': f'Expected {expected_total} intervals in fixed window, found {actual_intervals}; {explained_missing} explained by specific gaps (internal: {missing_from_gaps}, start: {n_missing_start}, end: {n_missing_end}), {unexplained_missing} unexplained'
+        })
+
+    # Also flag missing at start/end specifically if they exist
+    if n_missing_start > 0:
+        flags.append({
+            'station_id': station_id,
+            'channel': 'all',
+            'start_utc': missing_at_start[0].strftime('%Y-%m-%d %H:%M'),
+            'end_utc': missing_at_start[-1].strftime('%Y-%m-%d %H:%M'),
+            'issue': f'missing_intervals_at_start ({n_missing_start} expected 10-min intervals missing)',
+            'action': 'exclude',
+            'note': f'Missing {n_missing_start} intervals at start of expected window before first observation at {ts.min()}'
+        })
+
+    if n_missing_end > 0:
+        flags.append({
+            'station_id': station_id,
+            'channel': 'all',
+            'start_utc': missing_at_end[0].strftime('%Y-%m-%d %H:%M'),
+            'end_utc': missing_at_end[-1].strftime('%Y-%m-%d %H:%M'),
+            'issue': f'missing_intervals_at_end ({n_missing_end} expected 10-min intervals missing)',
+            'action': 'exclude',
+            'note': f'Missing {n_missing_end} intervals at end of expected window after last observation at {ts.max()}'
+        })
 
     return flags
 

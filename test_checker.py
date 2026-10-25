@@ -118,11 +118,11 @@ def test_check_timestamps():
     """Test timestamp checks."""
     print("Testing check_timestamps...")
 
-    # Create test DataFrame with duplicates
+    # Create test DataFrame with duplicates in the middle (not at end)
     dates = pd.date_range('2025-03-01', periods=10, freq='10min')
     df = pd.DataFrame({'timestamp_utc': dates})
-    # Add duplicate
-    df = pd.concat([df, pd.DataFrame({'timestamp_utc': [dates[5]]})], ignore_index=True)
+    # Add duplicate in the middle
+    df = pd.concat([df.iloc[:6], pd.DataFrame({'timestamp_utc': [dates[5]]}), df.iloc[6:]], ignore_index=True)
 
     flags = check_timestamps('S01', df)
     dup_flags = [f for f in flags if f['issue'].startswith('duplicate_timestamps')]
@@ -130,26 +130,109 @@ def test_check_timestamps():
     assert dup_flags[0]['action'] == 'exclude'
     print("  ✓ duplicate test passed")
 
-    # Test gap detection
+    # Test gap detection (internal gap)
     dates = pd.date_range('2025-03-01', periods=5, freq='10min')
     dates = dates.append(pd.DatetimeIndex([dates[-1] + pd.Timedelta(minutes=40)]))  # 30 min gap
     df = pd.DataFrame({'timestamp_utc': dates})
 
     flags = check_timestamps('S01', df)
-    gap_flags = [f for f in flags if 'missing_intervals' in f['issue']]
+    gap_flags = [f for f in flags if 'missing_intervals' in f['issue'] and 'start' not in f['issue'] and 'end' not in f['issue']]
     assert len(gap_flags) == 1
     assert gap_flags[0]['action'] == 'exclude'
-    print("  ✓ gap test passed")
+    print("  ✓ internal gap test passed")
 
     # Test out of order
-    dates = pd.date_range('2025-03-01', periods=5, freq='10min')
-    dates = dates.insert(3, dates[2])  # Out of order
+    dates = pd.DatetimeIndex([
+        '2025-03-01 00:00',
+        '2025-03-01 00:10',
+        '2025-03-01 00:30',  # jump forward
+        '2025-03-01 00:20',  # goes backward
+        '2025-03-01 00:40',
+    ])
     df = pd.DataFrame({'timestamp_utc': dates})
 
     flags = check_timestamps('S01', df)
     oob_flags = [f for f in flags if f['issue'] == 'out_of_order_timestamp']
     assert len(oob_flags) == 1
     print("  ✓ out-of-order test passed")
+
+    # Test missing at start (data starts after expected window)
+    dates = pd.date_range('2025-03-01 01:00', '2025-03-01 02:00', freq='10min')  # starts at 01:00, missing 00:00-00:50
+    df = pd.DataFrame({'timestamp_utc': dates})
+
+    flags = check_timestamps('S01', df)
+    start_flags = [f for f in flags if 'missing_intervals_at_start' in f['issue']]
+    assert len(start_flags) == 1
+    assert start_flags[0]['action'] == 'exclude'
+    assert start_flags[0]['note'] == 'Missing 6 intervals at start of expected window before first observation at 2025-03-01 01:00:00'
+    print("  ✓ missing at start test passed")
+
+    # Test missing at end (data ends before expected window)
+    dates = pd.date_range('2025-04-11 22:00', '2025-04-11 23:00', freq='10min')  # ends at 23:00, missing 23:10-23:50
+    df = pd.DataFrame({'timestamp_utc': dates})
+
+    flags = check_timestamps('S01', df)
+    end_flags = [f for f in flags if 'missing_intervals_at_end' in f['issue']]
+    assert len(end_flags) == 1
+    assert end_flags[0]['action'] == 'exclude
+    assert '5 intervals' in end_flags[0]['issue']
+    print("  ✓ missing at end test passed")
+
+    # Test S06-like scenario: internal duplicates + trailing gap
+    # Duplicates 2025-03-24 10:10-16:00 (36 timestamps × 2 = 72 rows)
+    # Ends at 2025-04-11 17:50 (missing 36 intervals at end)
+    base_dates = pd.date_range('2025-03-01', '2025-04-11 17:50', freq='10min')
+    dup_dates = pd.date_range('2025-03-24 10:10', '2025-03-24 16:00', freq='10min')
+    all_dates = base_dates.union(dup_dates)
+    df = pd.DataFrame({'timestamp_utc': all_dates})
+
+    flags = check_timestamps('S06', df)
+    dup_flags = [f for f in flags if f['issue'].startswith('duplicate_timestamps')]
+    assert len(dup_flags) == 1
+    assert '72 rows' in dup_flags[0]['issue'] or '36 unique timestamps' in dup_flags[0]['issue']
+
+    end_flags = [f for f in flags if 'missing_intervals_at_end' in f['issue']]
+    assert len(end_flags) == 1
+    assert '36' in end_flags[0]['issue']
+
+    # Should NOT have incomplete_coverage (since end gap is explained by missing_at_end)
+    cov_flags = [f for f in flags if 'incomplete_coverage' in f['issue']]
+    assert len(cov_flags) == 0
+    print("  ✓ S06-like scenario test passed")
+
+    # Test S08-like scenario: internal gap + duplicate day
+    # Gap 2025-03-16 13:50 to 2025-03-18 01:40 (214 intervals)
+    # Duplicate day 2025-04-05 (144 timestamps × 2 = 288 rows)
+    base_dates = pd.date_range('2025-03-01', '2025-04-11 23:50', freq='10min')
+    # Remove gap
+    gap_dates = pd.date_range('2025-03-16 14:00', '2025-03-18 01:30', freq='10min')
+    base_dates = base_dates.difference(gap_dates)
+    # Add duplicate day
+    dup_day = pd.date_range('2025-04-05 00:00', '2025-04-05 23:50', freq='10min')
+    all_dates = base_dates.union(dup_day)
+    df = pd.DataFrame({'timestamp_utc': all_dates})
+
+    flags = check_timestamps('S08', df)
+    gap_flags = [f for f in flags if 'missing_intervals' in f['issue'] and 'start' not in f['issue'] and 'end' not in f['issue']]
+    assert len(gap_flags) == 1
+    assert '214' in gap_flags[0]['issue']
+
+    dup_flags = [f for f in flags if f['issue'].startswith('duplicate_timestamps')]
+    assert len(dup_flags) == 1
+    assert '144' in dup_flags[0]['issue']
+
+    # Should NOT have incomplete_coverage (all missing explained by specific flags)
+    cov_flags = [f for f in flags if 'incomplete_coverage' in f['issue']]
+    assert len(cov_flags) == 0
+    print("  ✓ S08-like scenario test passed")
+
+    # Test clean station (S01-like): no issues
+    dates = pd.date_range('2025-03-01', '2025-04-11 23:50', freq='10min')
+    df = pd.DataFrame({'timestamp_utc': dates})
+
+    flags = check_timestamps('S01', df)
+    assert len(flags) == 0
+    print("  ✓ clean station test passed")
 
 
 def test_check_sensor_values():

@@ -28,6 +28,7 @@ S05,rh_pct,2025-03-30 04:40,2025-03-30 06:40,"prolonged_flatline (13 intervals, 
 S05,rh_pct,2025-04-01 04:10,2025-04-01 05:00,"prolonged_flatline (6 intervals, 60 minutes at 56.0)",keep,rh_pct constant at 56.0 for 6 consecutive 10-min intervals
 S05,metadata,2025-03-01 00:00,2025-04-11 23:00,gps_metadata_discrepancy (20419m from install location),correct,"GPS mean (39.753951, -104.895690) vs metadata (39.57, -104.8957): 20419m lat, 1m lon diff"
 S06,all,2025-03-24 10:10,2025-03-24 16:00,"duplicate_timestamps (72 rows, 36 unique timestamps duplicated)",exclude,36 consecutive timestamps each appear 2x; measurements differ
+S06,all,2025-04-11 18:00,2025-04-11 23:50,missing_intervals_at_end (36 expected 10-min intervals missing),exclude,Missing 36 intervals at end of expected window after last observation at 2025-04-11 17:50:00
 S06,rh_pct,2025-03-29 23:00,2025-03-30 01:10,"prolonged_flatline (14 intervals, 140 minutes at 100.0)",keep,rh_pct constant at 100.0 for 14 consecutive 10-min intervals
 S06,pressure_hpa,2025-03-16 20:00,2025-03-16 21:00,"prolonged_flatline (7 intervals, 70 minutes at 808.4)",keep,pressure_hpa constant at 808.4 for 7 consecutive 10-min intervals
 S06,pressure_hpa,2025-03-31 04:50,2025-03-31 05:40,"prolonged_flatline (6 intervals, 60 minutes at 802.0)",keep,pressure_hpa constant at 802.0 for 6 consecutive 10-min intervals
@@ -40,7 +41,6 @@ S07,pressure_hpa,2025-03-24 05:10,2025-03-24 06:00,"prolonged_flatline (6 interv
 S07,wind_kmh,2025-03-26 00:00,2025-04-11 23:50,wind_speed_drop_after_anemometer_swap (10.9 -> 2.5 km/h mean),keep,Maintenance log notes anemometer replacement 2025-03-26; mean wind speed dropped 4.3x (nearby stations show smaller change)
 S08,all,2025-04-05 00:00,2025-04-05 23:50,"duplicate_timestamps (288 rows, 144 unique timestamps duplicated)",exclude,144 consecutive timestamps each appear 2x; measurements differ
 S08,all,2025-03-16 13:50,2025-03-18 01:40,missing_intervals (214 expected 10-min intervals missing),exclude,Gap of 2150.0 minutes (214 missing intervals)
-S08,all,2025-03-01 00:00,2025-04-11 23:50,incomplete_coverage (214 intervals missing from expected 6048),keep,"Expected 6048 intervals from 2025-03-01 00:00:00 to 2025-04-11 23:50:00, found 5834"
 S08,rh_pct,2025-03-30 04:40,2025-03-30 06:10,"prolonged_flatline (10 intervals, 100 minutes at 100.0)",keep,rh_pct constant at 100.0 for 10 consecutive 10-min intervals
 S08,rh_pct,2025-04-05 19:00,2025-04-05 19:50,"prolonged_flatline (11 intervals, 110 minutes at 54.0)",keep,rh_pct constant at 54.0 for 11 consecutive 10-min intervals
 S08,pressure_hpa,2025-03-02 16:40,2025-03-02 17:30,"prolonged_flatline (6 intervals, 60 minutes at 850.3)",keep,pressure_hpa constant at 850.3 for 6 consecutive 10-min intervals
