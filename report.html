@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Aeron Network Health Report — Spring 2025</title>
+<style>
+  body {
+    font-family: system-ui, -apple-system, sans-serif;
+    font-size: 13px; line-height: 1.5; color: #111;
+    background: #fff; padding: 32px; max-width: 720px; margin: 0 auto;
+  }
+  h1 { font-size: 22px; font-weight: 600; margin: 0 0 4px; }
+  .meta { color: #555; font-size: 13px; margin-bottom: 24px; }
+  h2 { font-size: 16px; font-weight: 600; margin: 28px 0 8px; }
+  h3 { font-size: 14px; font-weight: 600; margin: 16px 0 6px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; margin: 10px 0 20px; }
+  th, td { padding: 6px 10px; text-align: left; border-bottom: 1px solid #ddd; }
+  th { background: #f5f5f5; font-weight: 600; text-align: left; }
+  .bad { background: #fef2f2; }
+  .warn { background: #fffbeb; }
+  .ok { background: #f0fdf4; }
+  .status { display: inline-block; padding: 2px 8px; border-radius: 3px; font-size: 11px; font-weight: 600; }
+  .status-exclude { background: #fef2f2; color: #991b1b; }
+  .status-correct { background: #fffbeb; color: #92400e; }
+  .status-keep { background: #f0fdf4; color: #166534; }
+  .note { font-size: 12px; color: #444; }
+  .section { margin: 28px 0; }
+  ul { margin: 8px 0 0 18px; }
+  li { margin: 4px 0; }
+  .footer { margin-top: 32px; font-size: 11px; color: #666; border-top: 1px solid #ddd; padding-top: 16px; }
+</style>
+</head>
+<body>
+
+<h1>Aeron Network Health Report — Spring 2025</h1>
+<p class="meta">8 stations · 2025-03-01 to 2025-04-11 · 10-min cadence · 37 flags</p>
+
+<h2>1. Which data is good enough for the spring climate summary?</h2>
+
+<h3>Use without changes</h3>
+<p>S01, S04 — all 6,048 intervals clean.</p>
+
+<h3>Use with minor corrections</h3>
+<ul>
+<li><strong>S05</strong> — RH reads up to 105% (sensor uncalibrated). Cap at 100% for the summary. GPS places S05 at S04's location; update metadata to GPS coordinates.</li>
+<li><strong>S03</strong> — Two single-point spikes to 85°C (2025-03-12, 2025-04-08). Interpolate across them.</li>
+<li><strong>S06</strong> — Exclude 2025-03-24 10:10–16:00 (logger reboot duplicates). Rest is clean.</li>
+</ul>
+
+<h3>Exclude entirely</h3>
+<ul>
+<li><strong>S02 pressure</strong> — Board swapped 2025-03-21 uncalibrated. +8.2 hPa sustained offset; no reference to fix it.</li>
+<li><strong>S03 temperature</strong> — Stuck at 6.5°C for 80 hours (2025-03-18 to 21). Other channels vary normally; sensor failed.</li>
+<li><strong>S07 wind</strong> — Anemometer replaced 2025-03-26 with different brand. 4.3× drop vs 1.4× at nearby stations; data unreliable.</li>
+<li><strong>S08</strong> — Gap 2025-03-16 to 18 (SIM plan), plus exact duplicate day 2025-04-05.</li>
+</ul>
+
+<h3>Coverage summary</h3>
+<p>42,266 / 42,336 expected intervals (99.8%). After exclusions above: ~38,000 clean intervals for the summary.</p>
+
+<hr style="margin: 28px 0; border: none; border-top: 1px solid #ddd;">
+
+<h2>2. Where to send the one volunteer technician next week?</h2>
+
+<h3>Send them to S07 — Riverbend Farm</h3>
+
+<p><strong>Check first:</strong> Anemometer model and serial number against the spares log to confirm what was installed 2025-03-26.</p>
+
+<p><strong>Then:</strong> 10-minute co-located comparison with a calibrated handheld anemometer at 2 m height. Log 1-min averages for speed and direction from both instruments.</p>
+
+<p><strong>Record:</strong> Scaling factor if constant; direction offset if any. If the factor varies with speed/direction, flag for manufacturer.</p>
+
+<h3>Why not S02 (pressure)?</h3>
+<p>S02 has an +8.2 hPa offset from an uncalibrated board swap. Fixing it needs a calibrated reference barometer — the volunteer doesn't have one. S07 is actionable in one hour with a handheld anemometer; S02 isn't. Wind data also feeds fire-weather and aviation alerts, so it's higher network priority.</p>
+
+<hr style="margin: 28px 0; border: none; border-top: 1px solid #ddd;">
+
+<h3>Full flag list (for reference)</h3>
+
+<table>
+<thead><tr><th>Station</th><th>Channel</th><th>Period</th><th>Action</th><th>Issue</th></tr></thead>
+<tbody>
+<tr class="bad"><td>S02</td><td>pressure_hpa</td><td>2025-03-21 11:00 – end</td><td>exclude</td><td>+8.2 hPa offset; uncalibrated board swap</td></tr>
+<tr class="bad"><td>S03</td><td>temp_c</td><td>2025-03-18 06:10 – 2025-03-21 14:00</td><td>exclude</td><td>Flatline 6.5°C × 80 h; sensor failed</td></tr>
+<tr class="bad"><td>S06</td><td>all</td><td>2025-03-24 10:10 – 16:00</td><td>exclude</td><td>Duplicate timestamps (logger reboot)</td></tr>
+<tr class="bad"><td>S06</td><td>all</td><td>2025-04-11 18:00 – 23:50</td><td>exclude</td><td>Missing 36 intervals at end</td></tr>
+<tr class="bad"><td>S07</td><td>wind_kmh</td><td>2025-03-26 – 2025-04-02</td><td>exclude</td><td>Anemometer swap; 4.3× drop vs 1.4× nearby</td></tr>
+<tr class="bad"><td>S08</td><td>all</td><td>2025-04-05 00:00 – 23:50</td><td>exclude</td><td>Exact duplicate day (144×2)</td></tr>
+<tr class="bad"><td>S08</td><td>all</td><td>2025-03-16 13:50 – 18 01:40</td><td>exclude</td><td>SIM gap (214 intervals, 35.8 h)</td></tr>
+<tr class="warn"><td>S03</td><td>temp_c</td><td>2025-03-12 / 2025-04-08</td><td>correct</td><td>Two 85°C spikes; interpolate</td></tr>
+<tr class="warn"><td>S05</td><td>rh_pct</td><td>2025-03-07 – 2025-03-11</td><td>correct</td><td>RH up to 105%; cap at 100%</td></tr>
+<tr class="warn"><td>S05</td><td>metadata</td><td>full period</td><td>correct</td><td>GPS 20.4 km from metadata</td></tr>
+</tbody>
+</table>
+
+<p class="note">All other flags are short flatlines (≤2 h) kept as real data.</p>
+
+<p class="footer">Generated by Aeron checker · <code>python3 checker.py assignment_data</code> · 37 flags (9 exclude, 3 correct, 25 keep)</p>
+
+</body>
+</html>
