@@ -406,9 +406,9 @@ def check_flatlines(station_id: str, df: pd.DataFrame) -> List[Dict]:
             start_ts = rows['timestamp_utc'].iloc[0]
             end_ts = rows['timestamp_utc'].iloc[-1]
 
-            # Flatlines > 2 hours (12 intervals) are exclude; <= 2 hours are keep
+            # Flatlines >= 2 hours (12 intervals) are exclude; < 2 hours are keep
             # Exception: S03 temp at 6.5°C for 480 intervals is exclude (sensor failure)
-            if length > 12:
+            if length >= 12:
                 action = 'exclude'
                 note = f'{col} constant at {value:.1f} for {length} consecutive 10-min intervals ({length*10} min); exceeds 2-hour threshold; likely sensor issue'
             elif station_id == 'S03' and col == 'temp_c' and value == 6.5 and length >= 480:
